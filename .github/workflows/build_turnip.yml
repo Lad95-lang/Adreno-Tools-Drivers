@@ -76,8 +76,6 @@ jobs:
             artifact: Turnip-A7xx-OneUI-Glitch
           - variant: a8xx-gen8
             artifact: Turnip-A8xx-Gen8
-          - variant: a8xx-patched
-            artifact: Turnip-A8xx-Patched
 
     steps:
       - name: Checkout Repository
