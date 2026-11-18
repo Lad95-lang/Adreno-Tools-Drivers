@@ -199,6 +199,7 @@ verify_mesa_mr_44838() {
 
 apply_android_ndk_fixes() {
     log "Aplicando fixes Android/NDK r29..."
+        python3 "$REPO_ROOT/fix_a619_subgroups.py"
     sed -i 's/typedef const native_handle_t\* buffer_handle_t;/typedef void* buffer_handle_t;/g' include/android_stub/cutils/native_handle.h || true
     sed -i 's/, hnd->handle/, (void *)hnd->handle/g' src/util/u_gralloc/u_gralloc_fallback.c || true
     sed -i -E 's/([a-z_]+)->handle->/((const native_handle_t *)\1->handle)->/g' src/vulkan/runtime/vk_android.c || true
