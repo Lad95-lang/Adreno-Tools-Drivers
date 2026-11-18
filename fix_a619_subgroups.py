@@ -5,7 +5,6 @@ import sys
 path = pathlib.Path("src/freedreno/ir3/ir3_nir.c")
 text = path.read_text()
 
-# Ищем вызов nir_lower_subgroups(s, ...);
 pattern = re.compile(r'(OPT\s*\(\s*([a-zA-Z0-9_]+)\s*,\s*nir_lower_subgroups\s*,[^;]+;\s*)')
 match = pattern.search(text)
 
@@ -40,23 +39,22 @@ ir3_nir_lower_subgroup_id_zero(nir_shader *s)
 }
 """
 
-# Вставляем вспомогательную функцию перед функцией ir3_nir_lower_subgroups или ir3_optimize_nir
-target_fn = "ir3_optimize_nir("
-if target_fn not in text:
-    target_fn = "ir3_nir_post_finalize("
+fn_pattern = re.compile(r'^[a-zA-Z0-9_*\s]+\bir3_nir_post_finalize\s*\(', re.MULTILINE)
+fn_match = fn_pattern.search(text)
+if not fn_match:
+    fn_pattern = re.compile(r'^[a-zA-Z0-9_*\s]+\bir3_optimize_nir\s*\(', re.MULTILINE)
+    fn_match = fn_pattern.search(text)
 
-idx = text.find(target_fn)
-if idx == -1:
+if not fn_match:
     print("ERROR: target insertion function not found", file=sys.stderr)
     sys.exit(1)
 
-line_start = text.rfind("\n", 0, idx) + 1
-text = text[:line_start] + helper_func + "\n" + text[line_start:]
+insert_pos = fn_match.start()
+text = text[:insert_pos] + helper_func + "\n" + text[insert_pos:]
 
-# Переищем вызов после вставки helper_func
 match = pattern.search(text)
 inject_call = f"""
-   if (subgroup_size == 1 && !gl_shader_stage_is_compute({shader_var}->info.stage)) {{
+   if (subgroup_size == 1 && !mesa_shader_stage_is_compute({shader_var}->info.stage)) {{
       OPT({shader_var}, ir3_nir_lower_subgroup_id_zero);
    }}
 """
