@@ -231,6 +231,20 @@ apply_a6xx_patches() {
         done
     fi
     log "A6xx: applied $count local patch(es)"
+
+    # ir3 subgroup fix for A6xx-low (A610/A619): python script next to this file.
+    # Mode: A6XX_SUBGROUP_MODE=auto (default) | graphics
+    if [ -f "$REPO_ROOT/fix_a619_subgroups.py" ]; then
+        log "A6xx: applying fix_a619_subgroups.py (mode: ${A6XX_SUBGROUP_MODE:-auto})"
+        python3 "$REPO_ROOT/fix_a619_subgroups.py" \
+            || die "fix_a619_subgroups.py failed - see the diagnostics above"
+        grep -q "ir3_nir_lower_subgroup_id_zero" src/freedreno/ir3/ir3_nir.c \
+            || die "ir3 fix marker missing after patching"
+        git diff -- src/freedreno/ir3/ir3_nir.c > "$WORKDIR/ir3_nir_a6xx.diff" || true
+        log "A6xx: diff saved to $WORKDIR/ir3_nir_a6xx.diff"
+    else
+        warn "fix_a619_subgroups.py not found next to the script - building WITHOUT the ir3 fix"
+    fi
 }
 
 configure_variant() {
