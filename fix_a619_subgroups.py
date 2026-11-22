@@ -13,6 +13,8 @@ Env:
                                  constant != 1 the gate would never fire, so the
                                  script falls back to `graphics` and says so.
                      = graphics  no gate: every non-compute shader (test build)
+                     = all       no gate, no stage filter: EVERY shader incl. compute
+                                 (diagnostic build; wave-op results become wrong)
 
 On any mismatch the script prints diagnostics and exits non-zero, so the build
 fails loudly instead of silently producing an unpatched driver.
@@ -133,6 +135,10 @@ print(f"Found nir_lower_subgroups call (style={found['style']}, shader var='{sha
 gate = None  # C expression for the subgroup size, or None for no gate
 if MODE == "graphics":
     print("Mode: graphics (no gate)")
+elif MODE == "all":
+    print("Mode: all (no gate, compute shaders included)")
+elif MODE != "auto":
+    die(f"unknown A6XX_SUBGROUP_MODE '{MODE}' (use auto | graphics | all)", 2)
 else:
     opts = found["opts"]
     expr = None
@@ -193,9 +199,13 @@ ir3_nir_lower_subgroup_id_zero(nir_shader *s)
 """
 
 # ---- build the call ----------------------------------------------------------
-cond = f"{shader}->info.stage != MESA_SHADER_COMPUTE"
-if gate:
-    cond = f"({gate}) == 1 && {cond}"
+stage_cond = f"{shader}->info.stage != MESA_SHADER_COMPUTE"
+if MODE == "all":
+    cond = None
+elif gate:
+    cond = f"({gate}) == 1 && {stage_cond}"
+else:
+    cond = stage_cond
 
 style = found["style"]
 if style in ("OPT", "OPT_V", "NIR_PASS_V"):
@@ -205,9 +215,12 @@ elif style == "NIR_PASS":
 else:
     call = f"ir3_nir_lower_subgroup_id_zero({shader});"
 
-inject = (f"\n\n   /* A6xx-low: never leave SubgroupLocalInvocationId for the backend\n"
-          f"    * (it would emit an unsupported getfiberid). */\n"
-          f"   if ({cond}) {{\n      {call}\n   }}\n")
+comment = ("\n\n   /* A6xx-low: never leave SubgroupLocalInvocationId for the backend\n"
+           "    * (it would emit an unsupported getfiberid). */\n")
+if cond is None:
+    inject = comment + f"   {call}\n"
+else:
+    inject = comment + f"   if ({cond}) {{\n      {call}\n   }}\n"
 
 # ---- apply (call first, then helper, so offsets stay valid) ------------------
 text = text[:stmt_end] + inject + text[stmt_end:]
